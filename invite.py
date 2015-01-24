@@ -387,6 +387,7 @@ def run(exit=True, vaultier_install=None):
                 if ocard not in vault_explicit_cards:
                     vault_explicit_cards.append(ocard)
                 clvl = {'ADMIN': 'WRITE',
+                        'CREATE': 'WRITE',
                         'MANAGE': 'WRITE'}.get(
                             caccesslevel.upper(),
                             caccesslevel.upper())
