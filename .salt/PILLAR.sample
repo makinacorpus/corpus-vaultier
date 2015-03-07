@@ -62,7 +62,7 @@ makina-projects.projectname:
     admins:
       {% for i in ['sysadmin'] %}
       - {{i}}:
-          mail: "{{i}}+{name}@{fqdn}"
+          mail: "{{i}}+{name}@{domain}"
           password: {{salt['mc_utils.generate_stored_password'](
                              'corpus-django_web_admin'+i)}}
       {%endfor %}
@@ -189,7 +189,7 @@ makina-projects.projectname:
         'allow_anonymous_usage_statistics': False
         'registration_allow': True
         # Vaultier blog news API endpoint. Must end with trailing slash
-        'news_url': 'http://{fqdn}/api/entries/'
+        'news_url': 'http://{domain}/api/entries/'
         # For how long wait for response in seconds
         'news_connection_timeout': 2
         # For how long news should be hold in cache in seconds. Vaultier API
