@@ -1,0 +1,210 @@
+#
+# This file contains default values which are used
+# by the salt states deploying your project.
+# you may copy them to your relevant PILLAR file
+# before editing them.
+# If you need to add variables, this is where to begin.
+# Please keep defaults in there, but real passwords
+# must be putted inside pillar
+#
+# replace project_name in your pillar by
+# the current projectname
+# you can also merge parts of this file
+# with the relevant pillar
+
+makina-projects.projectname:
+  data:
+    PROJECT: vaultier
+    app_root: "{project_root}/vaultier/vaultier"
+    app_url: "http://git.rclick.cz/rclick/vaultier.git"
+    app_url_rev: "stable"
+    app_url_type: git
+    #app_url_tar_opt: "xzvf"
+    #app_url_archive_format: tar
+    #app_url_hash: "md5=123"
+    #app_archive_test_exists: 'test ! -e "{data_root}/www/index.php"'
+    js_dir: "{app_root}/vaultier/scripts"
+    gulp_targets: ["clean-build"]
+    do_bower: true
+    do_gulp: true
+    settings_template: "config.py"
+    configs:
+      "vaultier_settings.py":
+        template: "vaultier_settings.py"
+        target: "{app_root}/{PROJECT}/vaultier_settings.py"
+      {% for i in ['settings_local.py',
+                   'localsettings.py',
+                   'local_settings.py'] %}
+      "{{i}}":
+        template: "{settings_template}"
+        target: "{app_root}/{PROJECT}/{{i}}"
+      {%endfor%}
+    htaccess: "/etc/{name}.webaccess"
+    py: "{py_root}/bin/python"
+    py_root: "{project_root}/venv"
+    media_source: "{app_root}/media"
+    domain: "{fqdn}"
+    requirements: "{project_root}/requirements.txt"
+    server_aliases: []
+    #force_ssl: false
+    #disabled_urls []
+    #ldap_url: "ldap://ldap.net/dc=m,dc=com?uid?sub?(objectClass=person)"
+    #admin_url: /admin
+    #admin_allowed_ips :[]
+    DJANGO_SETTINGS_MODULE: "{PROJECT}.vaultier_settings"
+    WSGI: "{PROJECT}.wsgi:application"
+    nginx_upstreams: salt://makina-projects/{name}/files/nginx.upstreams.conf
+    nginx_vhost: salt://makina-projects/{name}/files/nginx.content.conf
+    adminmail: "root@{domain}"
+    # no admin app on vaultier
+    create_admins: false
+    admins:
+      {% for i in ['sysadmin'] %}
+      - {{i}}:
+          mail: "{{i}}+{name}@{fqdn}"
+          password: {{salt['mc_utils.generate_stored_password'](
+                             'corpus-django_web_admin'+i)}}
+      {%endfor %}
+    static: "{data_root}/static"
+    media: "{data_root}/media"
+    host: localhost
+    port: 8180
+    workers: 10
+    worker_class: sync
+    worker_timeout: 9000
+    compile_messages: false
+    # http_users:
+    #   - root: foo
+    # extra django settings to add
+    # to the file
+    django_settings:
+      # order is important
+      ADMINS: "placeholder (totally computed)"
+      SITE_ID: 1
+      DATABASES:
+        default:
+          # SQLITE
+          # ENGINE: 'django.db.backends.sqlite3'
+          # NAME: "{data_root}/{PROJECT}.sqlite"
+          # GEODJANGO BACKEND !
+          #    ENGINE: 'django.contrib.gis.db.backends.postgis'
+          # Classical pg backend
+          ENGINE: 'django.db.backends.postgresql_psycopg2'
+          USER: '{name}'
+          PORT: 5432
+          HOST: '127.0.0.1'
+          NAME: 'db'
+          PASSWORD: '{name}secret'
+      DEFAULT_FROM_EMAIL: '{adminmail}'
+      SERVER_EMAIL: 'root@{fqdn}'
+      MEDIA_ROOT: '{media}'
+      STATIC_ROOT: '{static}'
+      LANGUAGE_CODE: fr-fr
+      DATE_FORMAT: 'iso-8601'
+      ALLOWED_HOSTS:
+        - localhost
+        - 127.0.0.1
+        - "{domain}"
+        - "{fqdn}"
+        - "10.5.0.1"
+      CORS_ORIGIN_ALLOW_ALL: True
+      # Internationalization
+      # https://docs.djangoproject.com/en/1.6/topics/i18n/
+      TIME_ZONE: 'Europe/Paris'
+      DEBUG: False
+      TEMPLATE_DEBUG: False
+      USE_X_FORWARDED_HOST: True
+      USER_MODULE: accounts
+      USER_CLASS: User
+      AUTH_USER_MODEL: "{USER_MODULE}.{USER_CLASS}"
+      SECRET_KEY: "{{salt['mc_utils.generate_stored_password'](
+                             'corpus-django_web_secret_key', 64)}}"
+      LOGGING:
+        version: 1
+        disable_existing_loggers: False
+        filters:
+          require_debug_false:
+            '()': django.utils.log.RequireDebugFalse
+        handlers:
+          mail_admins:
+            level: 'ERROR'
+            class: django.utils.log.AdminEmailHandler
+          console:
+            level: 'DEBUG'
+            class: 'logging.StreamHandler'
+        loggers:
+          '':
+            handlers: ['console']
+            level: 'DEBUG'
+            propagate: False
+          django.request:
+             handlers: ['console', 'mail_admins']
+             level: 'ERROR'
+             propagate: True
+          django:
+             handlers: ['console', 'mail_admins']
+             level: 'ERROR'
+             propagate': True
+      LANGUAGES:
+       - "('fr', _('French'))"
+       - "('en', _('English'))"
+       - "('it', _('Italia'))"
+      #ADDITIONAL_TEMPLATE_DIRS:
+      #  - '{project_root}/calanques'
+      #
+      CACHES:
+        default:
+          BACKEND: 'django.core.cache.backends.db.DatabaseCache'
+          LOCATION: 'vaultier_cache'
+      SITE_URL: "https://{domain}"
+      VAULTIER:
+        # sentry key to be used for loggin errors on the frontend
+        'raven_key': ''
+        # 'email@example.com' to send all emails to this address
+        'dev_mail_to': False
+        # True to use/generate same key for all users
+        'dev_shared_key': False
+        # 1 hour in milliseconds used to calculate the expiration time
+        # on api.lostkey module
+        'lostkey_hash_expiration_time': {{60*60*1000}}
+        # Default email address from which we send emails
+        'from_email': '{adminmail}'
+        # Max difference between timestamp from server and from front-end
+        # (in seconds)
+        'login_safe_timestamp': 15
+        # token lifetime (in hours)
+        'authentication_token_lifetime': 2
+        # last_used_at will be renewed after some interval (in minutes)
+        'authentication_token_renewal_interval': 1
+        # invitation lifetime (in hours)
+        'invitation_lifetime': 7
+        # When anonymous usage statistics is enabled, Vaultier periodically
+        # anonymously notifies its maintainer and developer about running
+        # instance of Vaultier.
+        # As Vaultier is Open Source we kindly ask you to leave this option
+        # enabled and let us know how many instances are deployed.
+        # We send these statistics data: hashed id, version, count of workspaces,
+        # vaults, cards, secrets, users and members
+        'allow_anonymous_usage_statistics': False
+        'registration_allow': False
+        # Vaultier blog news API endpoint. Must end with trailing slash
+        'news_url': 'http://{fqdn}/api/entries/'
+        # For how long wait for response in seconds
+        'news_connection_timeout': 2
+        # For how long news should be hold in cache in seconds. Vaultier API
+        # provides ETag functionality, so you can increase this
+        # value whatever you want.
+        'news_cache_timeout': {{60*10}}
+      # add custom extra_settings which will be processed at end only
+      #extra_django_settings:
+      #  FOO: bar
+      #  BAR: true
+      # settings rendered as is (not via the macro
+      #extra_settings:
+      #  FOO: "'bar'"
+      #  BAR: "True"
+  env_defaults:
+    dev:
+      django_setings:
+        DEBUG: True
+# vim:set ft=yaml:
