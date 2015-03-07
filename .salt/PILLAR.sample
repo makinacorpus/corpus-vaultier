@@ -16,6 +16,7 @@ makina-projects.projectname:
   data:
     PROJECT: vaultier
     app_root: "{project_root}/vaultier/vaultier"
+    app_download_dir: "{project_root}/{PROJECT}"
     app_url: "http://git.rclick.cz/rclick/vaultier.git"
     app_url_rev: "stable"
     app_url_type: git
@@ -186,7 +187,7 @@ makina-projects.projectname:
         # We send these statistics data: hashed id, version, count of workspaces,
         # vaults, cards, secrets, users and members
         'allow_anonymous_usage_statistics': False
-        'registration_allow': False
+        'registration_allow': True
         # Vaultier blog news API endpoint. Must end with trailing slash
         'news_url': 'http://{fqdn}/api/entries/'
         # For how long wait for response in seconds
@@ -205,6 +206,6 @@ makina-projects.projectname:
       #  BAR: "True"
   env_defaults:
     dev:
-      django_setings:
+      django_settings:
         DEBUG: True
 # vim:set ft=yaml:
