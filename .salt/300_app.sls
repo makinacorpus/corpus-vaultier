@@ -167,3 +167,31 @@ superuser-{{cfg.name}}-{{admin}}:
 {%endfor %}
 {%endfor %}
 {%endif %}
+
+
+
+{% if data['django_settings'].get('MC_LDAP_IMPORT') %}
+
+{% set f = '/etc/'+ cfg.name+ 'ldap-cron' %}
+{% set cf = '/etc/cron.d/'+ cfg.name+ 'ldap-cron' %}
+{{cfg.name}}-ldap-cron-s:
+  file.managed:
+    - name: {{f}}
+    - user: root
+    - group: root
+    - mode: 755
+    - contents: |
+                #!/usr/bin/env bash
+                export DJANGO_SETTINGS_MODULE="{{data.DJANGO_SETTINGS_MODULE}}"
+                . {{data.py_root}}/bin/activate
+                cd {{cfg.project_root}}
+                ./invite.py
+{{cfg.name}}-ldap-cron:
+  file.managed:
+    - name: {{cf}}
+    - user: root
+    - group: root
+    - mode: 750
+    - contents: |
+                */10 * * * * root su "{{cfg.user}}" -c "{{f}}"
+{% endif %}

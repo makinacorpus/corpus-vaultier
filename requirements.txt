@@ -13,4 +13,5 @@ SQLAlchemy == 0.9.4
 Pillow
 pycurl
 ipython
+python_ldap
 -r vaultier/REQUIREMENTS

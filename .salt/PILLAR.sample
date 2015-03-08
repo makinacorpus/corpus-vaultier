@@ -112,6 +112,80 @@ makina-projects.projectname:
       # Internationalization
       # https://docs.djangoproject.com/en/1.6/topics/i18n/
       TIME_ZONE: 'Europe/Paris'
+      MC_LDAP_IMPORT: False
+      MC_LDAP_IMPORT_URL: 'ldap://foo'
+      MC_LDAP_DN: 'uid=foo,ou=People,dc=m,dc=o'
+      MC_LDAP_PASSWORD: 'a'
+      MC_LDAP_BASE: 'dc=m,dc=o'
+      MC_LDAP_DEFAULT_WORKSPACE: 'ent-ws'
+      MC_LDAP_FILTER: |
+                      (& (!(objectClass=gosaUserTemplate))
+                         (objectClass=gosaMailAccount)
+                         (memberOf=cn=xxx,ou=Group,dc=m,dc=o)
+                      )
+      MC_LDAP_VAULTS:
+        - group2:
+            access:
+              - create:
+                  filter: |
+                          (&(!(objectClass=gosaUserTemplate))
+                            (objectClass=gosaMailAccount)
+                            (|(memberOf=cn=group2,ou=Group,dc=m,dc=o)
+                              (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+                            (memberOf=cn=allgroups,ou=Group,dc=m,dc=o))
+              - manage:
+                  filter: |
+                          (&(!(objectClass=gosaUserTemplate))
+                            (objectClass=gosaMailAccount)
+                            (memberOf=cn=allgroups,ou=Group,dc=m,dc=o)
+                            (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+            cards:
+              - passwords:
+                  access:
+                    - create:
+                        filter: |
+                                (&(!(objectClass=gosaUserTemplate))
+                                  (objectClass=gosaMailAccount)
+                                  (|(memberOf=cn=group2,ou=Group,dc=m,dc=o)
+                                    (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+                                  (memberOf=cn=allgroups,ou=Group,dc=m,dc=o))
+                    - manage:
+                        filter: |
+                                (&(!(objectClass=gosaUserTemplate))
+                                  (objectClass=gosaMailAccount)
+                                  (memberOf=cn=allgroups,ou=Group,dc=m,dc=o)
+                                  (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+        - group1:
+            access:
+              - create:
+                  filter: |
+                          (&(!(objectClass=gosaUserTemplate))
+                            (objectClass=gosaMailAccount)
+                            (|(memberOf=cn=group1,ou=Group,dc=m,dc=o)
+                              (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+                            (memberOf=cn=allgroups,ou=Group,dc=m,dc=o))
+              - manage:
+                  filter: |
+                          (&(!(objectClass=gosaUserTemplate))
+                            (objectClass=gosaMailAccount)
+                            (memberOf=cn=allgroups,ou=Group,dc=m,dc=o)
+                            (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+            cards:
+              - passwords:
+                  access:
+                    - create:
+                        filter: |
+                                (&(!(objectClass=gosaUserTemplate))
+                                  (objectClass=gosaMailAccount)
+                                  (|(memberOf=cn=group1,ou=Group,dc=m,dc=o)
+                                    (memberOf=cn=admins,ou=Group,dc=m,dc=o))
+                                  (memberOf=cn=allgroups,ou=Group,dc=m,dc=o))
+                    - manage:
+                        filter: |
+                                (&(!(objectClass=gosaUserTemplate))
+                                  (objectClass=gosaMailAccount)
+                                  (memberOf=cn=allgroups,ou=Group,dc=m,dc=o)
+                                  (memberOf=cn=admins,ou=Group,dc=m,dc=o))
       DEBUG: False
       TEMPLATE_DEBUG: False
       USE_X_FORWARDED_HOST: True
