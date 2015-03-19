@@ -206,235 +206,367 @@ def run(exit=True, vaultier_install=None):
     lfilter = settings.MC_LDAP_FILTER.strip()
     ws = settings.MC_LDAP_DEFAULT_WORKSPACE.strip()
     workspace = Workspace.objects.filter(slug=ws).first()
+    default_acl = RoleLevelField.LEVEL_CREATE
+    admin = User.objects.filter(id=admin_id)[0]
     if not workspace:
         raise Exception('{0} worspace does not exists'.format(ws))
+
     # get ldap users
-    results = None
-    with get_handler(
-        uri, base=base, user=cdn, password=password
-    ) as handler:
-        results = handler.query(lfilter)
-    errors = []
-    admin = User.objects.filter(id=admin_id)[0]
-    usersinfos = {}
-    for dn, result in results:
-        done = False
-        mails = result.get('mail', [])
-        if not mails:
-            continue
-        uid = result['uid'][0]
-        mail, longmail = None, None
-        _maile, domain = mails[0].split('@')
-        if len('_mail') in [3, 4, 5] and ('.' not in _maile):
-            mail = mails[0]
-        else:
-            longmail = mails[0]
-        if 'gosaMailAlternateAddress' in result:
-            # makina custom
-            if longmail:
-                mail = '{0}@{1}'.format(result['uid'][0], domain)
-            elif mail:
-                longmail = '{r[givenName][0]}.{r[sn][0]}@{domain}'.format(
-                    r=result, domain=domain).lower()
-        else:
-            longmail = mail
-        # search or create related user
-        user, results = None, []
-        results.extend(
-            User.objects.filter(email__in=[longmail, mail]).all())
-        results.extend(
-            User.objects.filter(nickname__in=[uid]).all())
-        if results:
-            user = results[0]
-        if not user:
-            # creation
-            user = User(nickname=uid, email=mail)
-        if not user:
-            # creation
-            errors.append(' - {0}: user not selected'.format(uid))
-            continue
-        save = False
-        if user.nickname != uid or user.email != mail:
-            save = True
-        user.nickname = uid
-        user.email = mail
-        if save:
-            user.save()
-            done = True
-        # invite user to workspace
-        default_status = MemberStatusField.STATUS_MEMBER_WITHOUT_WORKSPACE_KEY
-        default_acl = RoleLevelField.LEVEL_CREATE
-        member = Members.get_concrete_member_to_workspace(workspace, user)
-        if not member:
-            member = Member(workspace=workspace,
-                            user=user,
-                            invitation_email=mail,
-                            status=default_status,
-                            created_by=admin)
-            member.save()
-            done = True
-        existing_top_roles = Roles.filter(
-            to_workspace=workspace, to_card=None, to_vault=None, member=member)
-        existing_roles = Roles.filter(
-            to_workspace=workspace, member=member)
-        if not existing_top_roles:
-            Roles.create_or_update_role(
-                Role(member=member,
-                     to_workspace=workspace,
-                     created_by=admin,
-                     level=default_acl))
-            Members.remove_role_duplicatates(member)
-            done = True
-        usersinfos[uid] = {'user': user,
-                           'top_roles': existing_top_roles,
-                           'roles': existing_roles,
-                           'member': member}
-        done = done and 'imported' or 'existing'
-        log.info('  - {0} ({1}) {2}'.format(uid, mail, done))
-    for vaults in getattr(settings, 'MC_LDAP_VAULTS', []):
-        for vault, vaultdata in vaults.items():
-            vmembers = []
-            for accesses in vaultdata.get('access', []):
-                for vaccesslevel, vadata in accesses.items():
-                    results = None
+    def get_users_infos(errors=None):
+        if errors is None:
+            errors = []
+        usersinfos = {}
+        results = None
+        with get_handler(
+            uri, base=base, user=cdn, password=password
+        ) as handler:
+            results = handler.query(lfilter)
+        for dn, result in results:
+            done = False
+            mails = result.get('mail', [])
+            if not mails:
+                continue
+            uid = result['uid'][0]
+            mail, longmail = None, None
+            _maile, domain = mails[0].split('@')
+            if len('_mail') in [3, 4, 5] and ('.' not in _maile):
+                mail = mails[0]
+            else:
+                longmail = mails[0]
+            if 'gosaMailAlternateAddress' in result:
+                # makina custom
+                if longmail:
+                    mail = '{0}@{1}'.format(result['uid'][0], domain)
+                elif mail:
+                    longmail = '{r[givenName][0]}.{r[sn][0]}@{domain}'.format(
+                        r=result, domain=domain).lower()
+            else:
+                longmail = mail
+            # search or create related user
+            user, results = None, []
+            results.extend(
+                User.objects.filter(email__in=[longmail, mail]).all())
+            results.extend(
+                User.objects.filter(nickname__in=[uid]).all())
+            if results:
+                user = results[0]
+            if not user:
+                # creation
+                user = User(nickname=uid, email=mail)
+            if not user:
+                # creation
+                errors.append(' - {0}: user not selected'.format(uid))
+                continue
+            save = False
+            if user.nickname != uid or user.email != mail:
+                save = True
+            user.nickname = uid
+            user.email = mail
+            if save:
+                user.save()
+                done = True
+            # invite user to workspace
+            default_status = (
+                MemberStatusField.STATUS_MEMBER_WITHOUT_WORKSPACE_KEY)
+            member = Members.get_concrete_member_to_workspace(workspace, user)
+            if not member:
+                member = Member(workspace=workspace,
+                                user=user,
+                                invitation_email=mail,
+                                status=default_status,
+                                created_by=admin)
+                member.save()
+                done = True
+            existing_top_roles = Roles.filter(
+                to_workspace=workspace,
+                to_card=None,
+                to_vault=None,
+                member=member)
+            existing_roles = Roles.filter(
+                to_workspace=workspace, member=member)
+            if not existing_top_roles:
+                Roles.create_or_update_role(
+                    Role(member=member,
+                         to_workspace=workspace,
+                         created_by=admin,
+                         level=default_acl))
+                Members.remove_role_duplicatates(member)
+                done = True
+            usersinfos[uid] = {'user': user,
+                               'top_roles': existing_top_roles,
+                               'roles': existing_roles,
+                               'member': member}
+            done = done and 'imported' or 'existing'
+            log.info('  - {0} ({1}) {2}'.format(uid, mail, done))
+        return errors, usersinfos
+
+    def defined_card_access(usersinfos,
+                            ovault,
+                            ocard,
+                            caccess=None,
+                            vault_explicit_cards=None,
+                            errors=None):
+        if caccess is None:
+            caccess = []
+        if errors is None:
+            errors = []
+        if vault_explicit_cards is None:
+            vault_explicit_cards = []
+        cmembers = []
+        card = ocard.name
+        for accesses in caccess:
+            for caccesslevel, cadata in accesses.items():
+                cresults = None
+                with get_handler(
+                    uri, base=base, user=cdn, password=password
+                ) as handler:
+                    lfilter = stripfilter(cadata['filter'])
+                    cresults = handler.query(lfilter)
+                if not cresults:
+                    errors.append(
+                        'Card filter failed  {0} card'.format(
+                            card))
+                    continue
+                if not ocard:
+                    errors.append(
+                        'CARD: Missing {0} card'.format(card))
+                    continue
+                if ocard not in vault_explicit_cards:
+                    vault_explicit_cards.append(ocard)
+                clvl = {'ADMIN': 'WRITE',
+                        'MANAGE': 'WRITE'}.get(
+                            caccesslevel.upper(),
+                            caccesslevel.upper())
+                cilvl = getattr(RoleLevelField, 'LEVEL_' + clvl,
+                                default_acl)
+                for dn, cresult in cresults:
+                    cuid = cresult['uid'][0]
+                    if cuid not in usersinfos:
+                        if not cuid.startswith('shared'):
+                            continue
+                        errors.append(
+                            'CARD: No info for {0}'.format(cuid))
+                        continue
+                    member = usersinfos[cuid]['member']
+                    cmembers.append(member)
+                    crole = Roles.filter(to_card=ocard, member=member).all()
+                    if crole:
+                        crole = crole[0]
+                        if crole.level != cilvl:
+                            crole = None
+                    if not crole:
+                        log.info(
+                            'Card {0}: join; {1}'.format(
+                                card, cuid))
+                        crole = Roles.create_or_update_role(
+                            Role(member=member,
+                                 to_card=ocard,
+                                 created_by=admin,
+                                 level=cilvl))
+                        if crole.level != cilvl:
+                            crole.level = cilvl
+                            crole.save()
+        dcto_delete = [role
+                       for role in Roles.filter(to_card=ocard)
+                       if role.member not in cmembers]
+        for dcrole in dcto_delete:
+            log.info(
+                'card {0}: revoking access for {1}'.format(
+                    role.to_card.name,
+                    dcrole.member.user.nickname))
+            dcrole.delete()
+        return errors, vault_explicit_cards
+
+    def define_inherited_level_cards(usersinfos,
+                                     ovault,
+                                     access=None,
+                                     vault_explicit_cards=None,
+                                     errors=None):
+        if access is None:
+            access = []
+        if errors is None:
+            errors = []
+        vault_cards = [a for a in Cards.filter(vault=ovault)]
+        # for card not in conf, give same perms as vault
+        scvmembers = []
+        for scocard in vault_cards:
+            if scocard in vault_explicit_cards:
+                continue
+            for scardaccesses in access:
+                for vscardaccesslevel, scvadata in scardaccesses.items():
+                    vsresults = None
                     with get_handler(
                         uri, base=base, user=cdn, password=password
                     ) as handler:
-                        lfilter = stripfilter(vadata['filter'])
+                        sclfilter = stripfilter(scvadata['filter'])
                         try:
-                            results = handler.query(lfilter)
+                            vsresults = handler.query(sclfilter)
                         except:
-                            errors.append('vault {0}; invalid'
+                            errors.append('vault {0}; scard invalid'
                                           ' filter'.format(vault))
                             continue
-                    if not results:
+                    if not vsresults:
                         errors.append(
-                            'Vault filter failed {0} vault'.format(vault))
+                            'SCARD filter failed {0} vault'.format(vault))
                         continue
-                    ovault = None
-                    try:
-                        ovault = Vaults.filter(slug=vault)[0]
-                    except IndexError:
-                        ovault = Vaults.filter(name__icontains=vault)[0]
-                    if not ovault:
-                        errors.append('Missing {0} vault'.format(vault))
-                        continue
-                    lvl = {'ADMIN': 'WRITE',
-                           'MANAGE': 'WRITE'}.get(vaccesslevel.upper(),
-                                                  vaccesslevel.upper())
-                    vilvl = getattr(RoleLevelField, 'LEVEL_' + lvl,
-                                    default_acl)
-                    for dn, result in results:
-                        uid = result['uid'][0]
-                        if uid not in usersinfos:
-                            errors.append('No info for {0}'.format(uid))
+                    sclvl = {'ADMIN': 'WRITE',
+                             'MANAGE': 'WRITE'}.get(
+                                 vscardaccesslevel.upper(),
+                                 vscardaccesslevel.upper())
+                    scvilvl = getattr(RoleLevelField,
+                                      'LEVEL_' + sclvl,
+                                      default_acl)
+                    for dn, scresult in vsresults:
+                        scuid = scresult['uid'][0]
+                        if scuid not in gusersinfos:
+                            if scuid.startswith('shared'):
+                                continue
+                            errors.append('No info for {0}'.format(scuid))
                             continue
-                        user = usersinfos[uid]['user']
-                        member = usersinfos[uid]['member']
-                        vmembers.append(member)
-                        vrole = Roles.filter(to_vault=ovault,
-                                             member=member).all()
-                        if vrole:
-                            vrole = vrole[0]
-                            if vrole.level != vilvl:
-                                vrole = None
-                        if not vrole:
-                            log.info('Vault {0}: join; {1}'.format(vault, uid))
-                            vrole = Roles.create_or_update_role(
-                                Role(member=member,
-                                     to_vault=ovault,
+                        scmember = gusersinfos[scuid]['member']
+                        scvmembers.append(scmember)
+                        scvrole = Roles.filter(to_card=scocard,
+                                               member=scmember).all()
+                        if scvrole:
+                            scvrole = scvrole[0]
+                            if scvrole.level != scvilvl:
+                                scvrole = None
+                        if not scvrole:
+                            log.info(
+                                'Vault {0}/{2}: join; {1}'.format(
+                                    vault, scuid, scocard.name))
+                            scvrole = Roles.create_or_update_role(
+                                Role(member=scmember,
+                                     to_card=scocard,
                                      created_by=admin,
-                                     level=vilvl))
-                            if vrole.level != vilvl:
-                                vrole.level = vilvl
-                                vrole.save()
-            dvto_delete = [role
-                           for role in Roles.filter(to_vault=ovault)
-                           if role.member not in vmembers]
-            for dvrole in dvto_delete:
+                                     level=scvilvl))
+                            if scvrole.level != scvilvl:
+                                scvrole.level = scvilvl
+                                scvrole.save()
+            scdvto_delete = [role
+                             for role in Roles.filter(to_card=scocard)
+                             if role.member not in scvmembers]
+            for scdvrole in scdvto_delete:
                 log.info(
-                    'vault {0}: revoking access for {1}'.format(
-                        role.to_vault.name,
-                        member.user.nickname))
-                dvrole.delete()
+                    'vault {0}/{1}: card revoking access for {1}'.format(
+                        vault,
+                        role.to_card.name,
+                        scdvrole.member.user.nickname))
+                scdvrole.delete()
+        return errors, vault_explicit_cards
+
+    def define_vault_access(usersinfos, ovault, access=None, errors=None):
+        vault = ovault.name
+        if access is None:
+            access = []
+        vmembers = []
+        for accesses in access:
+            for vaccesslevel, vadata in accesses.items():
+                results = None
+                with get_handler(
+                    uri, base=base, user=cdn, password=password
+                ) as handler:
+                    lfilter = stripfilter(vadata['filter'])
+                    try:
+                        results = handler.query(lfilter)
+                    except:
+                        errors.append('vault {0}; invalid'
+                                      ' filter'.format(vault))
+                        continue
+                if not results:
+                    errors.append(
+                        'Vault filter failed {0} vault'.format(vault))
+                    continue
+                lvl = {'ADMIN': 'WRITE',
+                       'MANAGE': 'WRITE'}.get(vaccesslevel.upper(),
+                                              vaccesslevel.upper())
+                vilvl = getattr(RoleLevelField, 'LEVEL_' + lvl,
+                                default_acl)
+                for dn, result in results:
+                    uid = result['uid'][0]
+                    if uid not in usersinfos:
+                        if uid.startswith('shared'):
+                            continue
+                        errors.append('No info for {0}'.format(uid))
+                        continue
+                    member = usersinfos[uid]['member']
+                    vmembers.append(member)
+                    vrole = Roles.filter(to_vault=ovault,
+                                         member=member).all()
+                    if vrole:
+                        vrole = vrole[0]
+                        if vrole.level != vilvl:
+                            vrole = None
+                    if not vrole:
+                        log.info('Vault {0}: join; {1}'.format(vault, uid))
+                        vrole = Roles.create_or_update_role(
+                            Role(member=member,
+                                 to_vault=ovault,
+                                 created_by=admin,
+                                 level=vilvl))
+                        if vrole.level != vilvl:
+                            vrole.level = vilvl
+                            vrole.save()
+        dvto_delete = [role
+                       for role in Roles.filter(to_vault=ovault)
+                       if role.member not in vmembers]
+        for dvrole in dvto_delete:
+            log.info(
+                'vault {0}: revoking access for {1}'.format(
+                    role.to_vault.name,
+                    dvrole.member.user.nickname))
+            dvrole.delete()
+        return errors
+
+    errors = []
+    errors, gusersinfos = get_users_infos(errors=errors)
+    for vaults in getattr(settings, 'MC_LDAP_VAULTS', []):
+        for vault, vaultdata in vaults.items():
+            ovault = None
+            access = vaultdata.get('access', [])
+            try:
+                ovault = Vaults.filter(slug=vault)[0]
+            except IndexError:
+                ovault = Vaults.filter(name__icontains=vault)[0]
+            if not ovault:
+                errors.append('Missing {0} vault'.format(vault))
+                continue
+            errors = define_vault_access(gusersinfos,
+                                         ovault=ovault,
+                                         access=access,
+                                         errors=errors)
+            vault_explicit_cards = []
             for cards in vaultdata.get('cards', []):
                 for card, carddata in cards.items():
-                    cmembers = []
-                    for accesses in carddata.get('access', []):
-                        for caccesslevel, cadata in accesses.items():
-                            cresults = None
-                            with get_handler(
-                                uri, base=base, user=cdn, password=password
-                            ) as handler:
-                                lfilter = stripfilter(cadata['filter'])
-                                cresults = handler.query(lfilter)
-                            if not cresults:
-                                errors.append(
-                                    'Card filter failed  {0} card'.format(
-                                        card))
-                                continue
-                            ocard = None
+                    ocard = None
+                    try:
+                        ocard = Cards.filter(
+                            slug=card, vault=ovault)[0]
+                    except IndexError:
+                        try:
+                            ocard = Cards.filter(
+                                name__icontains=card, vault=ovault)[0]
+                        except IndexError:
                             try:
                                 ocard = Cards.filter(
-                                    slug=card, vault=ovault)[0]
-                            except IndexError:
-                                try:
-                                    ocard = Cards.filter(
-                                        name__icontains=card, vault=ovault)[0]
-                                except IndexError:
-                                    try:
-                                        ocard = Cards.filter(
-                                            slug__icontains=card,
-                                            vault=ovault)[0]
-                                    except:
-                                        ocard = None
-                            if not ocard:
-                                errors.append(
-                                    'CARD: Missing {0} card'.format(card))
-                                continue
-                            clvl = {'ADMIN': 'WRITE',
-                                    'MANAGE': 'WRITE'}.get(
-                                        caccesslevel.upper(),
-                                        caccesslevel.upper())
-                            cilvl = getattr(RoleLevelField, 'LEVEL_' + clvl,
-                                            default_acl)
-                            for dn, cresult in cresults:
-                                uid = cresult['uid'][0]
-                                if uid not in usersinfos:
-                                    errors.append(
-                                        'CARD: No info for {0}'.format(uid))
-                                    continue
-                                user = usersinfos[uid]['user']
-                                member = usersinfos[uid]['member']
-                                cmembers.append(member)
-                                crole = Roles.filter(to_vault=ovault,
-                                                     member=member).all()
-                                if crole:
-                                    crole = crole[0]
-                                    if crole.level != cilvl:
-                                        crole = None
-                                if not crole:
-                                    log.info(
-                                        'Card {0}: join; {1}'.format(
-                                            card, uid))
-                                    crole = Roles.create_or_update_role(
-                                        Role(member=member,
-                                             to_card=ocard,
-                                             created_by=admin,
-                                             level=cilvl))
-                                    if crole.level != cilvl:
-                                        crole.level = cilvl
-                                        crole.save()
-                    dcto_delete = [role
-                                   for role in Roles.filter(to_card=ocard)
-                                   if role.member not in cmembers]
-                    for dcrole in dcto_delete:
-                        log.info(
-                            'card {0}: revoking access for {1}'.format(
-                                role.to_card.name,
-                                member.user.nickname))
-                        dcrole.delete()
-
+                                    slug__icontains=card,
+                                    vault=ovault)[0]
+                            except:
+                                ocard = None
+                    caccess = carddata.get('access', [])
+                    errors, vault_explicit_cards = defined_card_access(
+                        gusersinfos,
+                        ovault=ovault,
+                        ocard=ocard,
+                        vault_explicit_cards=vault_explicit_cards,
+                        caccess=caccess,
+                        errors=errors)
+            errors, vault_explicit_cards = define_inherited_level_cards(
+                gusersinfos,
+                ovault=ovault,
+                access=access,
+                vault_explicit_cards=vault_explicit_cards,
+                errors=errors)
     ret = 0
     if errors:
         for i in errors:
