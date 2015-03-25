@@ -31,6 +31,13 @@ def stripfilter(string):
             '(& (', '(&(').strip()
 
 
+def dictfetchall(cursor):
+    "Returns all rows from a cursor as a dict"
+    desc = cursor.description
+    return [dict(zip([col[0] for col in desc], row))
+            for row in cursor.fetchall()]
+
+
 class _ConnectionHandler(object):
 
     def __init__(self,
@@ -178,6 +185,7 @@ def run(exit=True, vaultier_install=None):
     from acls.business.fields import RoleLevelField
     from django.db.models.loading import get_model
     from accounts.business.fields import MemberStatusField
+    from django.db import connections
     from django.conf import settings
     Member = get_model('accounts', 'Member')
     Vault = get_model('vaults', 'Vault')
@@ -266,10 +274,9 @@ def run(exit=True, vaultier_install=None):
             if save:
                 user.save()
                 done = True
-            # invite user to workspace
+            # invite user to workspaceo
             default_status = (
                 MemberStatusField.STATUS_MEMBER_WITHOUT_WORKSPACE_KEY)
-            member = Members.get_concrete_member_to_workspace(workspace, user)
             # try to remove orphaned roles linked with the mail
             for rl in Roles.filter(
                 member__invitation_email=mail,
@@ -278,6 +285,16 @@ def run(exit=True, vaultier_install=None):
                 rl_member = rl.member
                 rl.delete()
                 rl_member.delete()
+            cursor = connections['default'].cursor()
+            cursor.execute('select id from vaultier_member'
+                           ' where user_id is null'
+                           ' and invitation_email = %s', [mail])
+            res = dictfetchall(cursor)
+            for i in res:
+                for member in Members.filter(id=i['id']):
+                    member.delete()
+            #
+            member = Members.get_concrete_member_to_workspace(workspace, user)
             if not member:
                 member = Member(workspace=workspace,
                                 user=user,
