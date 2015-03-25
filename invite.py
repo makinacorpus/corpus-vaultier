@@ -253,6 +253,7 @@ def run(exit=True, vaultier_install=None):
             if not user:
                 # creation
                 user = User(nickname=uid, email=mail)
+                user.save()
             if not user:
                 # creation
                 errors.append(' - {0}: user not selected'.format(uid))
@@ -285,11 +286,11 @@ def run(exit=True, vaultier_install=None):
             existing_roles = Roles.filter(
                 to_workspace=workspace, member=member)
             if not existing_top_roles:
-                Roles.create_or_update_role(
-                    Role(member=member,
-                         to_workspace=workspace,
-                         created_by=admin,
-                         level=default_acl))
+                role = Role(member=member,
+                            to_workspace=workspace,
+                            created_by=admin,
+                            level=default_acl)
+                Roles.create_or_update_role(role)
                 Members.remove_role_duplicatates(member)
                 done = True
             usersinfos[uid] = {'user': user,
