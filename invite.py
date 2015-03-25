@@ -270,6 +270,14 @@ def run(exit=True, vaultier_install=None):
             default_status = (
                 MemberStatusField.STATUS_MEMBER_WITHOUT_WORKSPACE_KEY)
             member = Members.get_concrete_member_to_workspace(workspace, user)
+            # try to remove orphaned roles linked with the mail
+            for rl in Roles.filter(
+                member__invitation_email=mail,
+                member__user=None
+            ):
+                rl_member = rl.member
+                rl.delete()
+                rl_member.delete()
             if not member:
                 member = Member(workspace=workspace,
                                 user=user,
