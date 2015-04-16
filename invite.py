@@ -332,6 +332,7 @@ def run(exit=True, vaultier_install=None):
                             caccess=None,
                             vault_explicit_cards=None,
                             errors=None):
+        log.info('Working on {0}/{1}'.format(ovault.name, ocard.name))
         if caccess is None:
             caccess = []
         if errors is None:
