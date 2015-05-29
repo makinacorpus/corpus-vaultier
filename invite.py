@@ -182,9 +182,11 @@ def run(exit=True, vaultier_install=None):
         django.setup()
     except Exception:
         pass
+    from acls.business.fields import AclLevelField
     from acls.business.fields import RoleLevelField
     from django.db.models.loading import get_model
     from accounts.business.fields import MemberStatusField
+    from acls.business.perms.materializer import UpdateRoleLevelMaterializer
     from django.db import connections
     from django.conf import settings
     Member = get_model('accounts', 'Member')
@@ -393,15 +395,20 @@ def run(exit=True, vaultier_install=None):
                         if crole.level != cilvl:
                             crole.level = cilvl
                             crole.save()
+                    if not ocard.acl_set.filter(role=crole).all():
+                        UpdateRoleLevelMaterializer(crole).materialize()
+
         dcto_delete = [role
                        for role in Roles.filter(to_card=ocard)
                        if role.member not in cmembers]
         for dcrole in dcto_delete:
             log.info(
                 'card {0}: revoking access for {1}'.format(
-                    role.to_card.name,
+                    dcrole.to_card.name,
                     dcrole.member.user.nickname))
-            dcrole.delete()
+            tcard = dcrole.to_card
+            tcard.acl_set.filter(role__in=[dcrole]).all().delete()
+            tcard.role_set.filter(member__in=[dcrole.member]).all().delete()
         return errors, vault_explicit_cards
 
     def define_inherited_level_cards(usersinfos,
@@ -437,6 +444,7 @@ def run(exit=True, vaultier_install=None):
                             'SCARD filter failed {0} vault'.format(vault))
                         continue
                     sclvl = {'ADMIN': 'WRITE',
+                             'CREATE': 'WRITE',
                              'MANAGE': 'WRITE'}.get(
                                  vscardaccesslevel.upper(),
                                  vscardaccesslevel.upper())
@@ -470,6 +478,9 @@ def run(exit=True, vaultier_install=None):
                             if scvrole.level != scvilvl:
                                 scvrole.level = scvilvl
                                 scvrole.save()
+                        if not scocard.acl_set.filter(role=scvrole).all():
+                            UpdateRoleLevelMaterializer(
+                                scvrole).materialize()
             scdvto_delete = [role
                              for role in Roles.filter(to_card=scocard)
                              if role.member not in scvmembers]
@@ -477,9 +488,12 @@ def run(exit=True, vaultier_install=None):
                 log.info(
                     'vault {0}/{1}: card revoking access for {1}'.format(
                         vault,
-                        role.to_card.name,
+                        scdvrole.to_card.name,
                         scdvrole.member.user.nickname))
-                scdvrole.delete()
+                tcard = scdvrole.to_card
+                tcard.acl_set.filter(role__in=[scdvrole]).all().delete()
+                tcard.role_set.filter(
+                    member__in=[scdvrole.member]).all().delete()
         return errors, vault_explicit_cards
 
     def define_vault_access(usersinfos, ovault, access=None, errors=None):
@@ -534,6 +548,9 @@ def run(exit=True, vaultier_install=None):
                         if vrole.level != vilvl:
                             vrole.level = vilvl
                             vrole.save()
+                    if not ovault.acl_set.filter(role=vrole).all():
+                        UpdateRoleLevelMaterializer(
+                            vrole).materialize()
         dvto_delete = [role
                        for role in Roles.filter(to_vault=ovault)
                        if role.member not in vmembers]
@@ -542,7 +559,8 @@ def run(exit=True, vaultier_install=None):
                 'vault {0}: revoking access for {1}'.format(
                     role.to_vault.name,
                     dvrole.member.user.nickname))
-            dvrole.delete()
+            ovault.acl_set.filter(role__in=[dvrole]).all().delete()
+            ovault.role_set.filter(member__in=[dvrole.member]).all().delete()
         return errors
 
     errors = []
