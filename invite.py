@@ -468,7 +468,7 @@ def run(exit=True, vaultier_install=None):
                                 scvrole = None
                         if not scvrole:
                             log.info(
-                                'Vault {0}/{2}: join; {1}'.format(
+                                u'Vault {0}/{2}: join; {1}'.format(
                                     vault, scuid, scocard.name))
                             scvrole = Roles.create_or_update_role(
                                 Role(member=scmember,
@@ -486,7 +486,7 @@ def run(exit=True, vaultier_install=None):
                              if role.member not in scvmembers]
             for scdvrole in scdvto_delete:
                 log.info(
-                    'vault {0}/{1}: card revoking access for {1}'.format(
+                    u'vault {0}/{1}: card revoking access for {1}'.format(
                         vault,
                         scdvrole.to_card.name,
                         scdvrole.member.user.nickname))
