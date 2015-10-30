@@ -14,6 +14,21 @@ import logging
 from contextlib import contextmanager
 import ldap
 from collections import OrderedDict
+from optparse import OptionParser
+parser = OptionParser()
+parser.add_option("-q",
+                  "--quiet",
+                  default=None,
+                  action="store_true",
+                  help="make script quiet",
+                  dest="quiet")
+parser.add_option("-v",
+                  "--verbose",
+                  default=None,
+                  action="store_true",
+                  help="make script verbose",
+                  dest="verbose")
+
 
 _marker = object()
 _HANDLERS = {}
@@ -173,6 +188,13 @@ def run(exit=True, vaultier_install=None):
     from another project as vaultier code
     '''
     # load django
+    (options, args) = parser.parse_args()
+
+    verbose = False
+    if not options.quiet:
+        if options.verbose:
+            verbose = True
+
     d = os.path.abspath(os.path.dirname(__file__))
     if not vaultier_install:
         vaultier_install = os.path.join(d, 'vaultier/vaultier')
@@ -199,10 +221,12 @@ def run(exit=True, vaultier_install=None):
     Vaults = Vault.objects
     Cards = Card.objects
     Roles = Role.objects
+    lvl = verbose and logging.INFO or logging.ERROR
     logging.basicConfig(
         format="%(asctime)-15s %(name)s - %(message)s",
-        level=logging.INFO,
+        level=lvl,
         datefmt='%Y-%m-%d %H:%M:%S')
+    log.setLevel(lvl)
     log.info('start')
     if not getattr(settings, 'MC_LDAP_IMPORT', None):
         raise Exception('import not enabled')
