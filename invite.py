@@ -279,9 +279,12 @@ def run(exit=True, vaultier_install=None):
             # search or create related user
             user, results = None, []
             results.extend(
-                User.objects.filter(email__in=[longmail, mail]).all())
+                User.objects.filter(email__in=[mail]).all())
             results.extend(
                 User.objects.filter(nickname__in=[uid]).all())
+            if not results:
+                results.extend(
+                    User.objects.filter(email__in=[longmail]).all())
             if results:
                 user = results[0]
             if not user:
