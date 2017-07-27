@@ -7,6 +7,7 @@ __docformat__ = 'restructuredtext en'
 Vaultier ldap account synchronizator
 '''
 
+import six
 import sys
 import os
 import re
@@ -28,6 +29,7 @@ parser.add_option("-v",
                   action="store_true",
                   help="make script verbose",
                   dest="verbose")
+
 
 
 _marker = object()
@@ -211,6 +213,8 @@ def run(exit=True, vaultier_install=None):
     from acls.business.perms.materializer import UpdateRoleLevelMaterializer
     from django.db import connections
     from django.conf import settings
+    from django.db.models import Q
+
     Member = get_model('accounts', 'Member')
     Vault = get_model('vaults', 'Vault')
     Card = get_model('cards', 'Card')
@@ -219,6 +223,7 @@ def run(exit=True, vaultier_install=None):
     Workspace = get_model('workspaces', 'Workspace')
     Members = Member.objects
     Vaults = Vault.objects
+    Workspaces = Workspace.objects
     Cards = Card.objects
     Roles = Role.objects
     lvl = verbose and logging.INFO or logging.ERROR
@@ -238,12 +243,97 @@ def run(exit=True, vaultier_install=None):
     base = settings.MC_LDAP_BASE.strip()
     password = settings.MC_LDAP_PASSWORD.strip()
     lfilter = settings.MC_LDAP_FILTER.strip()
+    exfilter = settings.MC_LDAP_EX_FILTER.strip()
     ws = settings.MC_LDAP_DEFAULT_WORKSPACE.strip()
     workspace = Workspace.objects.filter(slug=ws).first()
     default_acl = RoleLevelField.LEVEL_CREATE
     admin = User.objects.filter(id=admin_id)[0]
     if not workspace:
         raise Exception('{0} worspace does not exists'.format(ws))
+
+    # get ldap ex users
+    def get_ex_users_infos():
+        gresults = {}
+        with get_handler(
+            uri, base=base, user=cdn, password=password
+        ) as handler:
+            results = handler.query(exfilter)
+        for dn, result in results:
+            mails = result.get('mail', [])
+            if not mails:
+                continue
+            uid = result['uid'][0]
+            mail, longmail = None, None
+            _maile, domain = mails[0].split('@')
+            if len('_mail') in [3, 4, 5] and ('.' not in _maile):
+                mail = mails[0]
+            else:
+                longmail = mails[0]
+            if 'gosaMailAlternateAddress' in result:
+                # makina custom
+                if longmail:
+                    mail = '{0}@{1}'.format(result['uid'][0], domain)
+                elif mail:
+                    longmail = '{r[givenName][0]}.{r[sn][0]}@{domain}'.format(
+                        r=result, domain=domain).lower()
+            else:
+                longmail = mail
+                # search or create related user
+            results = gresults.setdefault(uid, [])
+            results.extend(
+                [a for a in User.objects.filter(email__in=[mail]).all()
+                 if a not in results])
+            results.extend(
+                [a for a in User.objects.filter(nickname__in=[uid]).all()
+                 if a not in results])
+            results.extend(
+                [a for a in User.objects.filter(email__in=[longmail]).all()
+                 if a not in results])
+        return gresults
+
+    def cleanup_ex(ex_users, errors=None):
+        """
+        Not used & finished finally, deleting users passwords
+        can be problematic
+        """
+        return
+        members = Member
+        vaults = Vaults
+        cards = Vaults
+        workspaces = Workspaces
+        if errors is None:
+            errors = []
+        for uid, users in six.iteritems(ex_users):
+            roles_to_delete = Roles.filter(member__in=users)
+            for role in roles_to_delete:
+                if role.to_card:
+                    log.info('Removing for {0}: c access: {1}'.format(
+                        uid, role.to_card))
+                if role.to_vault:
+                    log.info('Removing for {0}: v access: {1}'.format(
+                        uid, role.to_vault))
+                if role.to_workspace:
+                    log.info('Removing for {0}: ws access: {1}'.format(
+                        uid, role.to_workspace))
+                role.delete()
+            if users:
+                for user in users:
+                    for member in Member.objects.filter(user__in=users):
+                        log.info(
+                            'Removing {0}'.format(member.invitation_email))
+                        member.delete()
+                    log.info('Removing {0}'.format(user))
+                    ws = Workspaces.filter(created_by=user)
+                    cs = Cards.filter(created_by=user)
+                    vaults = Vaults.filter(cgreated_by=user)
+                    for w in ws:
+                        roles = Roles.filter(Q(created_by=user)
+                                             | Q(user=user)
+                                             | Q(member=member))
+                        if roles:
+                            pass
+                    user.delete()
+        return errors
 
     # get ldap users
     def get_users_infos(errors=None):
@@ -339,13 +429,13 @@ def run(exit=True, vaultier_install=None):
                 member=member)
             existing_roles = Roles.filter(
                 to_workspace=workspace, member=member)
-            if not existing_top_roles:
+            if not (existing_top_roles or existing_roles):
+                # Members.remove_role_duplicatates(member)
                 role = Role(member=member,
                             to_workspace=workspace,
                             created_by=admin,
                             level=default_acl)
                 Roles.create_or_update_role(role)
-                Members.remove_role_duplicatates(member)
                 done = True
             usersinfos[uid] = {'user': user,
                                'top_roles': existing_top_roles,
@@ -592,6 +682,8 @@ def run(exit=True, vaultier_install=None):
         return errors
 
     errors = []
+    # ex_users = get_ex_users_infos()
+    # cleanup_ex(ex_users, errors=errors)
     errors, gusersinfos = get_users_infos(errors=errors)
     for vaults in getattr(settings, 'MC_LDAP_VAULTS', []):
         for vault, vaultdata in vaults.items():

@@ -125,6 +125,11 @@ makina-projects.projectname:
                          (objectClass=gosaMailAccount)
                          (memberOf=cn=xxx,ou=Group,dc=m,dc=o)
                       )
+      MC_LDAP_FILTER: |
+                      (& (!(objectClass=gosaUserTemplate))
+                         (objectClass=gosaMailAccount)
+                         (memberOf=cn=xxx-ex,ou=Group,dc=m,dc=o)
+                      )
       MC_LDAP_VAULTS:
         - group2:
             access:
