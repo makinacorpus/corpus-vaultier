@@ -14,6 +14,8 @@
 
 makina-projects.projectname:
   data:
+    USER_CLASS: User
+    USER_MODULE: accounts
     PROJECT: vaultier
     app_root: "{project_root}/vaultier/vaultier"
     app_download_dir: "{project_root}/{PROJECT}"
@@ -196,8 +198,8 @@ makina-projects.projectname:
       DEBUG: False
       TEMPLATE_DEBUG: False
       USE_X_FORWARDED_HOST: True
-      USER_MODULE: accounts
-      USER_CLASS: User
+      USER_MODULE: "{USER_MODULE}"
+      USER_CLASS: "{USER_CLASS}"
       AUTH_USER_MODEL: "{USER_MODULE}.{USER_CLASS}"
       SECRET_KEY: "{{salt['mc_utils.generate_stored_password'](
                              'corpus-django_web_secret_key', 64)}}"
