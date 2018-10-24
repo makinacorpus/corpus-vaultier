@@ -17,7 +17,7 @@ makina-projects.projectname:
     PROJECT: vaultier
     app_root: "{project_root}/vaultier/vaultier"
     app_download_dir: "{project_root}/{PROJECT}"
-    app_url: "http://git.rclick.cz/rclick/vaultier.git"
+    app_url: "https://github.com/corpusops/vaultier.git"
     #ldap_binddn: 'uid=x,ou=People,dc=x,dc=x'
     #ldap_binddn_passwd: 'x'
     app_url_rev: "stable"
